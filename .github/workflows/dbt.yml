@@ -1,5 +1,14 @@
+name: dbt CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
 jobs:
-  dbt-run:
+
+  # 🔹 DEV JOB (Validation)
+  dbt-dev:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,21 +28,59 @@ jobs:
         run: |
           dbt deps
 
-      # 👇 ADD THIS HERE (IMPORTANT)
       - name: Set DBT profiles directory
         run: |
           mkdir -p ~/.dbt
           cp profiles.yml ~/.dbt/profiles.yml
 
-      # 👇 AFTER THAT
       - name: Run dbt models (DEV)
         env:
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
         run: |
           dbt run --target dev
 
-      - name: Run dbt tests
+      - name: Run dbt tests (DEV)
         env:
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
         run: |
           dbt test --target dev
+
+
+  # 🔹 PROD JOB (Deployment)
+  dbt-prod:
+    needs: dbt-dev   # 👈 runs only if DEV succeeds
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dbt
+        run: |
+          pip install dbt-databricks
+
+      - name: Install dependencies
+        run: |
+          dbt deps
+
+      - name: Set DBT profiles directory
+        run: |
+          mkdir -p ~/.dbt
+          cp profiles.yml ~/.dbt/profiles.yml
+
+      - name: Run dbt models (PROD)
+        env:
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          dbt run --target prod
+
+      - name: Run dbt tests (PROD)
+        env:
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          dbt test --target prod
